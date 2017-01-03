@@ -1,0 +1,2 @@
+# Parser
+This program parses through assembly. The user must run this program on command line using the program name as the first argument and the file to parse as the second argument. If parsing is successful, the user will be told how many total operations were performed, how many Load/Store operations there were, how many ALU operations there were, and how many Compare/Jump operations there were. If there were errors in the assembly code, the user will be told what the error is and what line it is on.
