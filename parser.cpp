@@ -1,6 +1,6 @@
 /**
  * Bailey Thompson
- * Parser (1.0.3)
+ * Parser (1.0.4)
  * 4 February 2017
  * Info: Parses  assembly  file.  If there are no assembly errors, various types of operations are counted. If there are
  * Info: errors, the user is told what type of error, and what lines the errors are present on.
@@ -8,15 +8,15 @@
 #include <iostream>
 #include <fstream>
 
-const int CHARACTERS_PER_LINE = 100;
-const int OPERATIONS_PER_LINE = 20;
+const int MAX_CHARACTERS_PER_LINE = 100;
+const int MAX_OPERATIONS_PER_LINE = 20;
 
 enum ErrorCode {
     NO_ERROR, EXTRA, OPCODE, OPERAND, DIRECTIVE, MISSING, DUPLICATE, INVALID, LABEL, EXTRA_DECIMAL
 };
 
 struct Line {
-    char arg1[OPERATIONS_PER_LINE];
+    char arg1[MAX_OPERATIONS_PER_LINE];
     int arg2;
     int arg3;
     int arg4;
@@ -64,7 +64,7 @@ bool isErrorMissing(const Line input) {
 }
 
 void errorOutput(const Line* input) {
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         switch (input[i].errorCode) {
             case EXTRA:
                 std::cerr << "Error on line " << i + 1 << ": Invalid because of Extra." << std::endl;
@@ -97,6 +97,9 @@ void errorOutput(const Line* input) {
             case EXTRA_DECIMAL:
                 std::cerr << "Error on line " << i + 1 << ": Invalid because of Extra decimal." << std::endl;
                 break;
+            case NO_ERROR:
+                //there is no error, so there is no need to output an error
+                break;
         }
     }
     return;
@@ -104,7 +107,7 @@ void errorOutput(const Line* input) {
 
 void outputCommandStatistics(const Line* input) {
     int load = 0, alu = 0, jump = 0;
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (input[i].lineType == 4 || input[i].lineType == 5 || input[i].lineType == 6 || input[i].lineType == 7) {
             load++;
         } else if (input[i].lineType >= 16) {
@@ -118,7 +121,7 @@ void outputCommandStatistics(const Line* input) {
     std::cout << "Number of Load/Store: " << load << std::endl;
     std::cout << "Number of ALU: " << alu << std::endl;
     std::cout << "Number of Compare/Jump: " << jump << std::endl;
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (input[i].lineType == 3) {
             int c = 0;
             while (input[i].arg1[c] != ':') {
@@ -131,18 +134,91 @@ void outputCommandStatistics(const Line* input) {
     return;
 }
 
+int findLineType(const Line input) {
+    bool isLabel = false;
+    for (int i = 0; i < MAX_OPERATIONS_PER_LINE - 1; i++) {
+        if (input.arg1[i] == ':' && input.arg1[i + 1] == ' ') {
+            isLabel = true;
+        }
+    }
+    int ret = 0;
+    if (input.arg1[0] == 'C' && input.arg1[1] == 'o' && input.arg1[2] == 'd' && input.arg1[3] == 'e'
+            && input.arg1[4] == ':') {
+        ret = 1;
+    } else if (input.arg1[0] == 'D' && input.arg1[1] == 'a' && input.arg1[2] == 't'
+               && input.arg1[3] == 'a' && input.arg1[4] == ':') {
+        ret = 2;
+    } else if (isLabel) {
+        ret = 3;
+    } else if (input.arg1[0] == 'L' && input.arg1[1] == 'D' && input.arg1[2] == ' ') {
+        ret = 4;
+    } else if (input.arg1[0] == 'L' && input.arg1[1] == 'D' && input.arg1[2] == 'i' && input.arg1[3] == ' ') {
+        ret = 5;
+    } else if (input.arg1[0] == 'S' && input.arg1[1] == 'D' && input.arg1[2] == ' ') {
+        ret = 6;
+    } else if (input.arg1[0] == 'S' && input.arg1[1] == 'D' && input.arg1[2] == 'i' && input.arg1[3] == ' ') {
+        ret = 7;
+    } else if (input.arg1[0] == 'A' && input.arg1[1] == 'D' && input.arg1[2] == 'D' && input.arg1[3] == ' ') {
+        ret = 8;
+    } else if (input.arg1[0] == 'A' && input.arg1[1] == 'D' && input.arg1[2] == 'D'
+               && input.arg1[3] == 'i' && input.arg1[4] == ' ') {
+        ret = 9;
+    } else if (input.arg1[0] == 'S' && input.arg1[1] == 'U' && input.arg1[2] == 'B'
+               && input.arg1[3] == ' ') {
+        ret = 10;
+    } else if (input.arg1[0] == 'S' && input.arg1[1] == 'U' && input.arg1[2] == 'B'
+               && input.arg1[3] == 'i' && input.arg1[4] == ' ') {
+        ret = 11;
+    } else if (input.arg1[0] == 'M' && input.arg1[1] == 'U' && input.arg1[2] == 'L'
+               && input.arg1[3] == ' ') {
+        ret = 12;
+    } else if (input.arg1[0] == 'M' && input.arg1[1] == 'U' && input.arg1[2] == 'L'
+               && input.arg1[3] == 'i' && input.arg1[4] == ' ') {
+        ret = 13;
+    } else if (input.arg1[0] == 'D' && input.arg1[1] == 'I' && input.arg1[2] == 'V'
+               && input.arg1[3] == ' ') {
+        ret = 14;
+    } else if (input.arg1[0] == 'D' && input.arg1[1] == 'I' && input.arg1[2] == 'V'
+               && input.arg1[3] == 'i' && input.arg1[4] == ' ') {
+        ret = 15;
+    } else if (input.arg1[0] == 'J' && input.arg1[1] == 'M' && input.arg1[2] == 'P'
+               && input.arg1[3] == ' ') {
+        ret = 16;
+    } else if (input.arg1[0] == 'J' && input.arg1[1] == 'Z' && input.arg1[2] == ' ') {
+        ret = 17;
+    } else if (input.arg1[0] == 'J' && input.arg1[1] == 'N' && input.arg1[2] == 'Z'
+               && input.arg1[3] == ' ') {
+        ret = 18;
+    } else if (input.arg1[0] == 'J' && input.arg1[1] == 'G' && input.arg1[2] == 'Z'
+               && input.arg1[3] == ' ') {
+        ret = 19;
+    } else if (input.arg1[0] == 'J' && input.arg1[1] == 'G' && input.arg1[2] == 'E'
+               && input.arg1[3] == 'Z' && input.arg1[4] == ' ') {
+        ret = 20;
+    } else if (input.arg1[0] == 'J' && input.arg1[1] == 'L' && input.arg1[2] == 'Z'
+               && input.arg1[3] == ' ') {
+        ret = 21;
+    } else if (input.arg1[0] == 'J' && input.arg1[1] == 'L' && input.arg1[2] == 'E'
+               && input.arg1[3] == 'Z' && input.arg1[4] == ' ') {
+        ret = 22;
+    } else if (input.arg1[0] != ' ' || input.arg2 != 0 || input.arg3 != 0 || input.arg4 != 0) {
+        ret = -1;
+    }
+    return ret;
+}
+
 int main(int argc, char* argv[]) {
     //array of struct
-    Line lines[CHARACTERS_PER_LINE];
+    Line lines[MAX_CHARACTERS_PER_LINE];
     //initializing
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         lines[i].arg2 = 0;
         lines[i].arg3 = 0;
         lines[i].arg4 = 0;
         lines[i].lineType = 0;
         lines[i].codeNum = 0;
         lines[i].errorCode = NO_ERROR;
-        for (int j = 0; j < OPERATIONS_PER_LINE; j++) {
+        for (int j = 0; j < MAX_OPERATIONS_PER_LINE; j++) {
             lines[i].arg1[j] = ' ';
         }
     }
@@ -160,10 +236,10 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     //character buffer
-    char buffer[CHARACTERS_PER_LINE];
+    char buffer[MAX_CHARACTERS_PER_LINE];
     int lineNum = 0;
     //extracting file data
-    while (fin.getline(buffer, CHARACTERS_PER_LINE)) {
+    while (fin.getline(buffer, MAX_CHARACTERS_PER_LINE)) {
         int i = 0, arg1val = 0;
         bool isReg = false;
         while (isOnlyWhitespace(buffer[i])) {
@@ -246,83 +322,18 @@ int main(int argc, char* argv[]) {
         lineNum++;
     }
 
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
-        bool isLabel = false;
-        for (int j = 0; j < OPERATIONS_PER_LINE - 1; j++) {
-            if (lines[i].arg1[j] == ':' && lines[i].arg1[j + 1] == ' ') {
-                isLabel = true;
-            }
-        }
-        if (lines[i].arg1[0] == 'C' && lines[i].arg1[1] == 'o' && lines[i].arg1[2] == 'd' && lines[i].arg1[3] == 'e'
-                && lines[i].arg1[4] == ':') {
-            lines[i].lineType = 1;
-        } else if (lines[i].arg1[0] == 'D' && lines[i].arg1[1] == 'a' && lines[i].arg1[2] == 't'
-                   && lines[i].arg1[3] == 'a' && lines[i].arg1[4] == ':') {
-            lines[i].lineType = 2;
-        } else if (isLabel) {
-            lines[i].lineType = 3;
-        } else if (lines[i].arg1[0] == 'L' && lines[i].arg1[1] == 'D' && lines[i].arg1[2] == ' ') {
-            lines[i].lineType = 4;
-        } else if (lines[i].arg1[0] == 'L' && lines[i].arg1[1] == 'D' && lines[i].arg1[2] == 'i'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 5;
-        } else if (lines[i].arg1[0] == 'S' && lines[i].arg1[1] == 'D' && lines[i].arg1[2] == ' ') {
-            lines[i].lineType = 6;
-        } else if (lines[i].arg1[0] == 'S' && lines[i].arg1[1] == 'D' && lines[i].arg1[2] == 'i'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 7;
-        } else if (lines[i].arg1[0] == 'A' && lines[i].arg1[1] == 'D' && lines[i].arg1[2] == 'D'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 8;
-        } else if (lines[i].arg1[0] == 'A' && lines[i].arg1[1] == 'D' && lines[i].arg1[2] == 'D'
-                   && lines[i].arg1[3] == 'i' && lines[i].arg1[4] == ' ') {
-            lines[i].lineType = 9;
-        } else if (lines[i].arg1[0] == 'S' && lines[i].arg1[1] == 'U' && lines[i].arg1[2] == 'B'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 10;
-        } else if (lines[i].arg1[0] == 'S' && lines[i].arg1[1] == 'U' && lines[i].arg1[2] == 'B'
-                   && lines[i].arg1[3] == 'i' && lines[i].arg1[4] == ' ') {
-            lines[i].lineType = 11;
-        } else if (lines[i].arg1[0] == 'M' && lines[i].arg1[1] == 'U' && lines[i].arg1[2] == 'L'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 12;
-        } else if (lines[i].arg1[0] == 'M' && lines[i].arg1[1] == 'U' && lines[i].arg1[2] == 'L'
-                   && lines[i].arg1[3] == 'i' && lines[i].arg1[4] == ' ') {
-            lines[i].lineType = 13;
-        } else if (lines[i].arg1[0] == 'D' && lines[i].arg1[1] == 'I' && lines[i].arg1[2] == 'V'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 14;
-        } else if (lines[i].arg1[0] == 'D' && lines[i].arg1[1] == 'I' && lines[i].arg1[2] == 'V'
-                   && lines[i].arg1[3] == 'i' && lines[i].arg1[4] == ' ') {
-            lines[i].lineType = 15;
-        } else if (lines[i].arg1[0] == 'J' && lines[i].arg1[1] == 'M' && lines[i].arg1[2] == 'P'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 16;
-        } else if (lines[i].arg1[0] == 'J' && lines[i].arg1[1] == 'Z' && lines[i].arg1[2] == ' ') {
-            lines[i].lineType = 17;
-        } else if (lines[i].arg1[0] == 'J' && lines[i].arg1[1] == 'N' && lines[i].arg1[2] == 'Z'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 18;
-        } else if (lines[i].arg1[0] == 'J' && lines[i].arg1[1] == 'G' && lines[i].arg1[2] == 'Z'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 19;
-        } else if (lines[i].arg1[0] == 'J' && lines[i].arg1[1] == 'G' && lines[i].arg1[2] == 'E'
-                   && lines[i].arg1[3] == 'Z' && lines[i].arg1[4] == ' ') {
-            lines[i].lineType = 20;
-        } else if (lines[i].arg1[0] == 'J' && lines[i].arg1[1] == 'L' && lines[i].arg1[2] == 'Z'
-                   && lines[i].arg1[3] == ' ') {
-            lines[i].lineType = 21;
-        } else if (lines[i].arg1[0] == 'J' && lines[i].arg1[1] == 'L' && lines[i].arg1[2] == 'E'
-                   && lines[i].arg1[3] == 'Z' && lines[i].arg1[4] == ' ') {
-            lines[i].lineType = 22;
-        } else if (lines[i].arg1[0] != ' ' || lines[i].arg2 != 0 || lines[i].arg3 != 0 || lines[i].arg4 != 0) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
+        const int temp = findLineType(lines[i]);
+        if (temp != -1) {
+            lines[i].lineType = temp;
+        } else {
             lines[i].errorCode = OPCODE;
         }
     }
 
     //counting what the code value of the line is
     int code = -1;
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 1) {
             code = lines[i].arg2;
             lines[i].codeNum = code;
@@ -337,26 +348,26 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (isTooManyParameters(lines[i])) {
             lines[i].errorCode = EXTRA;
         }
     }
 
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].errorCode == NO_ERROR && isWrongOperation(lines[i])) {
             lines[i].errorCode = OPERAND;
         }
     }
 
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].errorCode == NO_ERROR && isErrorMissing(lines[i])) {
             lines[i].errorCode = MISSING;
         }
     }
 
     //checking for duplicate error
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 3) {
             for (int p = 0; p < i; p++) {
                 bool same = true;
@@ -374,7 +385,7 @@ int main(int argc, char* argv[]) {
         }
     }
     bool doneOnce = false;
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 1 && !doneOnce) {
             doneOnce = true;
         } else if (lines[i].lineType == 1 && doneOnce) {
@@ -383,9 +394,9 @@ int main(int argc, char* argv[]) {
     }
 
     //checking for extra characters
-    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+    for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 3) {
-            for (int j = 0; j < OPERATIONS_PER_LINE; j++) {
+            for (int j = 0; j < MAX_OPERATIONS_PER_LINE; j++) {
                 if (lines[i].arg1[j] == '.' || lines[i].arg1[j] == '_') {
                     lines[i].errorCode = LABEL;
                 }
