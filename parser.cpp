@@ -1,35 +1,148 @@
 /**
  * Bailey Thompson
- * Parser (1.0.2)
- * 28 November 2016
+ * Parser (1.0.3)
+ * 4 February 2017
  * Info: Parses  assembly  file.  If there are no assembly errors, various types of operations are counted. If there are
  * Info: errors, the user is told what type of error, and what lines the errors are present on.
  */
 #include <iostream>
 #include <fstream>
 
+const int CHARACTERS_PER_LINE = 100;
+const int OPERATIONS_PER_LINE = 20;
+
+enum ErrorCode {
+    NO_ERROR, EXTRA, OPCODE, OPERAND, DIRECTIVE, MISSING, DUPLICATE, INVALID, LABEL, EXTRA_DECIMAL
+};
+
 struct Line {
-    char arg1[20];
+    char arg1[OPERATIONS_PER_LINE];
     int arg2;
     int arg3;
     int arg4;
     int lineType; //0=nothing; 1=code; 2=data; 3=label; 4+=operations
     int codeNum;
-    int errorCode;
+    ErrorCode errorCode;
 };
+
+bool isNumber(const char input) {
+    return input >= '0' && input <= '9';
+}
+
+bool isUnimportantCharacter(const char input) {
+    return input == ' ' || input == '\t' || input == '#' || input == '\0';
+}
+
+bool isOnlyWhitespace(const char input) {
+    return (input == ' ' || input == '\t') && input != '#' && input != '\0';
+}
+
+bool isOnlyWhitespaceOrComma(const char input) {
+    return (input == ' ' || input == '\t' || input == ',') && input != '#' && input != '\0';
+}
+
+bool isTooManyParameters(const Line input) {
+    return (input.errorCode == NO_ERROR && input.lineType == 16 && (input.arg3 != 0 || input.arg4 != 0))
+           || ((input.lineType >= 17 || input.lineType <= 7) && input.arg4 != 0 && input.errorCode == NO_ERROR);
+}
+
+bool isWrongOperation(const Line input) {
+    return (input.lineType == 16 && input.arg2 < 0) || (input.lineType > 16 && (input.arg2 > 0 || input.arg3 < 0))
+           || ((input.lineType == 8 || input.lineType == 10 || input.lineType == 12 || input.lineType == 14)
+               && (input.arg2 > 0 || input.arg3 > 0 || input.arg4 > 0))
+           || ((input.lineType == 9 || input.lineType == 11 || input.lineType == 13 || input.lineType == 15)
+               && (input.arg2 > 0 || input.arg3 < 0 || input.arg4 > 0)) || (input.lineType == 4 && input.arg3 > 0)
+           || (input.lineType == 5 && (input.arg2 < 0 || input.arg3 > 0)) || (input.lineType == 6 && input.arg2 > 0)
+           || (input.lineType == 7 && input.arg2 < 0);
+}
+
+bool isErrorMissing(const Line input) {
+    return (input.lineType >= 4 && input.lineType <= 7 && (input.arg2 == 0 || input.arg3 == 0))
+           || (input.lineType >= 8 && input.lineType <= 15 && (input.arg2 == 0 || input.arg3 == 0 || input.arg4 == 0))
+           || (input.lineType >= 17 && (input.arg2 == 0 || input.arg3 == 0))
+           || (input.lineType == 16 && input.arg2 == 0);
+}
+
+void errorOutput(const Line* input) {
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+        switch (input[i].errorCode) {
+            case EXTRA:
+                std::cerr << "Error on line " << i + 1 << ": Invalid because of Extra." << std::endl;
+                break;
+            case OPCODE:
+                std::cerr << "Error on line " << i + 1 << ": Invalid because of Opcode" << std::endl;
+                std::cerr << "Error on line " << i + 2 << ": Invalid because of Opcode. "
+                          << "(This error trails onto this line)" << std::endl;
+                break;
+            case OPERAND:
+                std::cerr << "Error on line " << i + 1 << ": Invalid because of Operand." << std::endl;
+                break;
+            case DIRECTIVE:
+                std::cerr << "Error on line " << i + 1 << ": Invalid because of Directive." << std::endl;
+                break;
+            case MISSING:
+                std::cerr << "Error on line " << i + 1 << ": Invalid because of Missing." << std::endl;
+                break;
+            case DUPLICATE:
+                std::cerr << "Error on line " << i + 1 << ": Invalid because of Duplicate." << std::endl;
+                break;
+            case INVALID:
+                std::cerr << "Error on line " << i + 1 << ": Invalid." << std::endl;
+                break;
+            case LABEL:
+                std::cerr << "Error on line " << i << ": Invalid character in label. "
+                          << "(The next error trails back to this line)" << std::endl;
+                std::cerr << "Error on line " << i + 1 << ": Invalid character in label." << std::endl;
+                break;
+            case EXTRA_DECIMAL:
+                std::cerr << "Error on line " << i + 1 << ": Invalid because of Extra decimal." << std::endl;
+                break;
+        }
+    }
+    return;
+}
+
+void outputCommandStatistics(const Line* input) {
+    int load = 0, alu = 0, jump = 0;
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+        if (input[i].lineType == 4 || input[i].lineType == 5 || input[i].lineType == 6 || input[i].lineType == 7) {
+            load++;
+        } else if (input[i].lineType >= 16) {
+            jump++;
+        } else if (input[i].lineType >= 8 && input[i].lineType <= 15) {
+            alu++;
+        }
+    }
+
+    std::cout << "Total number of assembly instructions: " << load + alu + jump << std::endl;
+    std::cout << "Number of Load/Store: " << load << std::endl;
+    std::cout << "Number of ALU: " << alu << std::endl;
+    std::cout << "Number of Compare/Jump: " << jump << std::endl;
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+        if (input[i].lineType == 3) {
+            int c = 0;
+            while (input[i].arg1[c] != ':') {
+                std::cout << input[i].arg1[c];
+                c++;
+            }
+            std::cout << ": " << input[i].codeNum << std::endl;
+        }
+    }
+    return;
+}
 
 int main(int argc, char* argv[]) {
     //array of struct
-    Line lines[100];
+    Line lines[CHARACTERS_PER_LINE];
     //initializing
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
         lines[i].arg2 = 0;
         lines[i].arg3 = 0;
         lines[i].arg4 = 0;
         lines[i].lineType = 0;
         lines[i].codeNum = 0;
-        lines[i].errorCode = 0;
-        for (int j = 0; j < 20; j++) {
+        lines[i].errorCode = NO_ERROR;
+        for (int j = 0; j < OPERATIONS_PER_LINE; j++) {
             lines[i].arg1[j] = ' ';
         }
     }
@@ -47,37 +160,33 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     //character buffer
-    char buffer[100];
+    char buffer[CHARACTERS_PER_LINE];
     int lineNum = 0;
     //extracting file data
-    while (fin.getline(buffer, 100)) {
+    while (fin.getline(buffer, CHARACTERS_PER_LINE)) {
         int i = 0, arg1val = 0;
         bool isReg = false;
-        while ((buffer[i] == ' ' || buffer[i] == '\t') && buffer[i] != '#' && buffer[i] != '\0') {
+        while (isOnlyWhitespace(buffer[i])) {
             i++;
         }
-        while (buffer[i] != ' ' && buffer[i] != '\t' && buffer[i] != '#' && buffer[i] != '\0') {
+        while (!isUnimportantCharacter(buffer[i])) {
             lines[lineNum].arg1[arg1val] = buffer[i];
             arg1val++;
             i++;
         }
-        while ((buffer[i] == ' ' || buffer[i] == '\t') && buffer[i] != '#' && buffer[i] != '\0') {
+        while (isOnlyWhitespace(buffer[i])) {
             i++;
         }
-        while (buffer[i] != ' ' && buffer[i] != '\t' && buffer[i] != '#' && buffer[i] != '\0') {
+        while (!isUnimportantCharacter(buffer[i])) {
             if (buffer[i] == 'R' && isReg == false) {
-                if (buffer[i + 1] != '0' && buffer[i + 1] != '1' && buffer[i + 1] != '2' && buffer[i + 1] != '3'
-                        && buffer[i + 1] != '4' && buffer[i + 1] != '5' && buffer[i + 1] != '6'
-                        && buffer[i + 1] != '7' && buffer[i + 1] != '8' && buffer[i + 1] != '9') {
-                    lines[lineNum].errorCode = 7;
+                if (!isNumber(buffer[i + 1])) {
+                    lines[lineNum].errorCode = INVALID;
                 }
                 isReg = true;
-            } else if (buffer[i] == '0' || buffer[i] == '1' || buffer[i] == '2' || buffer[i] == '3'
-                       || buffer[i] == '4' || buffer[i] == '5' || buffer[i] == '6'
-                       || buffer[i] == '7' || buffer[i] == '8' || buffer[i] == '9') {
-                lines[lineNum].arg2 = lines[lineNum].arg2 * 10 + int(buffer[i]) - 48;
+            } else if (isNumber(buffer[i])) {
+                lines[lineNum].arg2 = lines[lineNum].arg2 * 10 + int(buffer[i]) - '0';
                 if (buffer[i + 1] == '.') {
-                    lines[lineNum].errorCode = 9;
+                    lines[lineNum].errorCode = EXTRA_DECIMAL;
                 }
             }
             i++;
@@ -86,23 +195,19 @@ int main(int argc, char* argv[]) {
             lines[lineNum].arg2 *= -1;
             isReg = false;
         }
-        while ((buffer[i] == ' ' || buffer[i] == '\t' || buffer[i] == ',') && buffer[i] != '#' && buffer[i] != '\0') {
+        while (isOnlyWhitespaceOrComma(buffer[i])) {
             i++;
         }
-        while (buffer[i] != ' ' && buffer[i] != '\t' && buffer[i] != '#' && buffer[i] != '\0') {
+        while (!isUnimportantCharacter(buffer[i])) {
             if (buffer[i] == 'R' && isReg == false) {
-                if (buffer[i + 1] != '0' && buffer[i + 1] != '1' && buffer[i + 1] != '2' && buffer[i + 1] != '3'
-                        && buffer[i + 1] != '4' && buffer[i + 1] != '5' && buffer[i + 1] != '6'
-                        && buffer[i + 1] != '7' && buffer[i + 1] != '8' && buffer[i + 1] != '9') {
-                    lines[lineNum].errorCode = 7;
+                if (!isNumber(buffer[i + 1])) {
+                    lines[lineNum].errorCode = INVALID;
                 }
                 isReg = true;
-            } else if (buffer[i] == '0' || buffer[i] == '1' || buffer[i] == '2' || buffer[i] == '3'
-                       || buffer[i] == '4' || buffer[i] == '5' || buffer[i] == '6'
-                       || buffer[i] == '7' || buffer[i] == '8' || buffer[i] == '9') {
-                lines[lineNum].arg3 = lines[lineNum].arg3 * 10 + int(buffer[i]) - 48;
+            } else if (isNumber(buffer[i])) {
+                lines[lineNum].arg3 = lines[lineNum].arg3 * 10 + int(buffer[i]) - '0';
                 if (buffer[i + 1] == '.') {
-                    lines[lineNum].errorCode = 9;
+                    lines[lineNum].errorCode = EXTRA_DECIMAL;
                 }
             }
             i++;
@@ -111,23 +216,19 @@ int main(int argc, char* argv[]) {
             lines[lineNum].arg3 *= -1;
             isReg = false;
         }
-        while ((buffer[i] == ' ' || buffer[i] == '\t' || buffer[i] == ',') && buffer[i] != '#' && buffer[i] != '\0') {
+        while (isOnlyWhitespaceOrComma(buffer[i])) {
             i++;
         }
-        while (buffer[i] != ' ' && buffer[i] != '\t' && buffer[i] != '#' && buffer[i] != '\0') {
+        while (!isUnimportantCharacter(buffer[i])) {
             if (buffer[i] == 'R' && isReg == false) {
-                if (buffer[i + 1] != '0' && buffer[i + 1] != '1' && buffer[i + 1] != '2' && buffer[i + 1] != '3'
-                        && buffer[i + 1] != '4' && buffer[i + 1] != '5' && buffer[i + 1] != '6'
-                        && buffer[i + 1] != '7' && buffer[i + 1] != '8' && buffer[i + 1] != '9') {
-                    lines[lineNum].errorCode = 7;
+                if (!isNumber(buffer[i + 1])) {
+                    lines[lineNum].errorCode = INVALID;
                 }
                 isReg = true;
-            } else if (buffer[i] == '0' || buffer[i] == '1' || buffer[i] == '2' || buffer[i] == '3'
-                       || buffer[i] == '4' || buffer[i] == '5' || buffer[i] == '6'
-                       || buffer[i] == '7' || buffer[i] == '8' || buffer[i] == '9') {
-                lines[lineNum].arg4 = lines[lineNum].arg4 * 10 + int(buffer[i]) - 48;
+            } else if (isNumber(buffer[i])) {
+                lines[lineNum].arg4 = lines[lineNum].arg4 * 10 + int(buffer[i]) - '0';
                 if (buffer[i + 1] == '.') {
-                    lines[lineNum].errorCode = 9;
+                    lines[lineNum].errorCode = EXTRA_DECIMAL;
                 }
             }
             i++;
@@ -136,17 +237,18 @@ int main(int argc, char* argv[]) {
             lines[lineNum].arg4 *= -1;
             isReg = false;
         }
-        while ((buffer[i] == ' ' || buffer[i] == '\t' || buffer[i] == ',') && buffer[i] != '#' && buffer[i] != '\0') {
+        while (isOnlyWhitespaceOrComma(buffer[i])) {
             i++;
         }
         if (buffer[i] != '#' && buffer[i] != '\0') {
-            lines[lineNum].errorCode = 1;
+            lines[lineNum].errorCode = EXTRA;
         }
         lineNum++;
     }
-    for (int i = 0; i < 100; i++) {
+
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
         bool isLabel = false;
-        for (int j = 0; j < 19; j++) {
+        for (int j = 0; j < OPERATIONS_PER_LINE - 1; j++) {
             if (lines[i].arg1[j] == ':' && lines[i].arg1[j + 1] == ' ') {
                 isLabel = true;
             }
@@ -214,75 +316,47 @@ int main(int argc, char* argv[]) {
                    && lines[i].arg1[3] == 'Z' && lines[i].arg1[4] == ' ') {
             lines[i].lineType = 22;
         } else if (lines[i].arg1[0] != ' ' || lines[i].arg2 != 0 || lines[i].arg3 != 0 || lines[i].arg4 != 0) {
-            lines[i].errorCode = 2;
+            lines[i].errorCode = OPCODE;
         }
     }
+
     //counting what the code value of the line is
     int code = -1;
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 1) {
             code = lines[i].arg2;
             lines[i].codeNum = code;
         } else if (lines[i].lineType >= 4) {
             lines[i].codeNum = code;
             if (code == -1) {
-                lines[0].errorCode = 4;
+                lines[0].errorCode = DIRECTIVE;
             }
             code++;
         } else if (lines[i].lineType == 2 || lines[i].lineType == 3) {
             lines[i].codeNum = code;
         }
     }
-    //error code for too many parameters
-    for (int i = 0; i < 100; i++) {
-        if (lines[i].errorCode == 0 && lines[i].lineType == 16 && (lines[i].arg3 != 0 || lines[i].arg4 != 0)) {
-            lines[i].errorCode = 1;
-        } else if ((lines[i].lineType >= 17 || lines[i].lineType <= 7) && lines[i].arg4 != 0
-                   && lines[i].errorCode == 0) {
-            lines[i].errorCode = 1;
+
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+        if (isTooManyParameters(lines[i])) {
+            lines[i].errorCode = EXTRA;
         }
     }
-    //error code for wrong operation
-    for (int i = 0; i < 100; i++) {
-        if (lines[i].errorCode == 0) {
-            if (lines[i].lineType == 16 && lines[i].arg2 < 0) {
-                lines[i].errorCode = 3;
-            } else if (lines[i].lineType > 16 && (lines[i].arg2 > 0 || lines[i].arg3 < 0)) {
-                lines[i].errorCode = 3;
-            } else if ((lines[i].lineType == 8 || lines[i].lineType == 10 || lines[i].lineType == 12
-                        || lines[i].lineType == 14) && (lines[i].arg2 > 0 || lines[i].arg3 > 0 || lines[i].arg4 > 0)) {
-                lines[i].errorCode = 3;
-            } else if ((lines[i].lineType == 9 || lines[i].lineType == 11 || lines[i].lineType == 13
-                        || lines[i].lineType == 15) && (lines[i].arg2 > 0 || lines[i].arg3 < 0 || lines[i].arg4 > 0)) {
-                lines[i].errorCode = 3;
-            } else if (lines[i].lineType == 4 && lines[i].arg3 > 0) {
-                lines[i].errorCode = 3;
-            } else if (lines[i].lineType == 5 && (lines[i].arg2 < 0 || lines[i].arg3 > 0)) {
-                lines[i].errorCode = 3;
-            } else if (lines[i].lineType == 6 && lines[i].arg2 > 0) {
-                lines[i].errorCode = 3;
-            } else if (lines[i].lineType == 7 && lines[i].arg2 < 0) {
-                lines[i].errorCode = 3;
-            }
+
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+        if (lines[i].errorCode == NO_ERROR && isWrongOperation(lines[i])) {
+            lines[i].errorCode = OPERAND;
         }
     }
-    //checking for missing error
-    for (int i = 0; i < 100; i++) {
-        if (lines[i].errorCode == 0) {
-            if (lines[i].lineType >= 4 && lines[i].lineType <= 7 && (lines[i].arg2 == 0 || lines[i].arg3 == 0)) {
-                lines[i].errorCode = 5;
-            } else if (lines[i].lineType >= 17 && (lines[i].arg2 == 0 || lines[i].arg3 == 0)) {
-                lines[i].errorCode = 5;
-            } else if (lines[i].lineType == 16 && lines[i].arg2 == 0) {
-                lines[i].errorCode = 5;
-            } else if (lines[i].lineType >= 8 && lines[i].lineType <= 15 && (lines[i].arg2 == 0
-                       || lines[i].arg3 == 0 || lines[i].arg4 == 0)) {
-                lines[i].errorCode = 5;
-            }
+
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
+        if (lines[i].errorCode == NO_ERROR && isErrorMissing(lines[i])) {
+            lines[i].errorCode = MISSING;
         }
     }
+
     //checking for duplicate error
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 3) {
             for (int p = 0; p < i; p++) {
                 bool same = true;
@@ -294,80 +368,32 @@ int main(int argc, char* argv[]) {
                     h++;
                 }
                 if (same) {
-                    lines[i].errorCode = 6;
+                    lines[i].errorCode = DUPLICATE;
                 }
             }
         }
     }
     bool doneOnce = false;
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 1 && !doneOnce) {
             doneOnce = true;
         } else if (lines[i].lineType == 1 && doneOnce) {
-            lines[i].errorCode = 6;
+            lines[i].errorCode = DUPLICATE;
         }
     }
+
     //checking for extra characters
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 3) {
-            for (int il = 0; il < 20; il++) {
-                if (lines[i].arg1[il] == '.' || lines[i].arg1[il] == '_') {
-                    lines[i].errorCode = 8;
+            for (int j = 0; j < OPERATIONS_PER_LINE; j++) {
+                if (lines[i].arg1[j] == '.' || lines[i].arg1[j] == '_') {
+                    lines[i].errorCode = LABEL;
                 }
             }
         }
     }
-    //outputing errors
-    for (int i = 0; i < 100; i++) {
-        if (lines[i].errorCode == 1) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid because of Extra." << std::endl;
-        } else if (lines[i].errorCode == 2) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid because of Opcode" << std::endl;
-            std::cerr << "Error on line " << i + 2 << ": Invalid because of Opcode. "
-                      << "(This error trails onto this line)" << std::endl;
-        } else if (lines[i].errorCode == 3) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid because of Operand." << std::endl;
-        } else if (lines[i].errorCode == 4) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid because of Directive." << std::endl;
-        } else if (lines[i].errorCode == 5) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid because of Missing." << std::endl;
-        } else if (lines[i].errorCode == 6) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid because of Duplicate." << std::endl;
-        } else if (lines[i].errorCode == 7) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid." << std::endl;
-        } else if (lines[i].errorCode == 8) {
-            std::cerr << "Error on line " << i << ": Invalid character in label. "
-                      << "(The next error trails back to this line)" << std::endl;
-            std::cerr << "Error on line " << i + 1 << ": Invalid character in label." << std::endl;
-        } else if (lines[i].errorCode == 9) {
-            std::cerr << "Error on line " << i + 1 << ": Invalid because of Extra decimal." << std::endl;
-        }
-    }
-    //calculating
-    int load = 0, alu = 0, jump = 0;
-    for (int i = 0; i < 100; i++) {
-        if (lines[i].lineType == 4 || lines[i].lineType == 5 || lines[i].lineType == 6 || lines[i].lineType == 7) {
-            load++;
-        } else if (lines[i].lineType >= 16) {
-            jump++;
-        } else if (lines[i].lineType >= 8 && lines[i].lineType <= 15) {
-            alu++;
-        }
-    }
-    //outputing
-    std::cout << "Total number of assembly instructions: " << load + alu + jump << std::endl;
-    std::cout << "Number of Load/Store: " << load << std::endl;
-    std::cout << "Number of ALU: " << alu << std::endl;
-    std::cout << "Number of Compare/Jump: " << jump << std::endl;
-    for (int i = 0; i < 100; i++) {
-        if (lines[i].lineType == 3) {
-            int c = 0;
-            while (lines[i].arg1[c] != ':') {
-                std::cout << lines[i].arg1[c];
-                c++;
-            }
-            std::cout << ": " << lines[i].codeNum << std::endl;
-        }
-    }
+
+    errorOutput(lines);
+    outputCommandStatistics(lines);
     return 0;
 }
