@@ -1,9 +1,9 @@
-/**
+/*
  * Bailey Thompson
- * Parser (1.0.4)
- * 4 February 2017
- * Info: Parses  assembly  file.  If there are no assembly errors, various types of operations are counted. If there are
- * Info: errors, the user is told what type of error, and what lines the errors are present on.
+ * Parser (1.0.5)
+ * 20 February 2017
+ * Parses assembly file. If there are no assembly errors, various types of operations are counted. If there are errors,
+ * the user is told what type of error, and what lines the errors are present on.
  */
 #include <iostream>
 #include <fstream>
@@ -20,7 +20,7 @@ struct Line {
     int arg2;
     int arg3;
     int arg4;
-    int lineType; //0=nothing; 1=code; 2=data; 3=label; 4+=operations
+    int lineType;  // 0=nothing; 1=code; 2=data; 3=label; 4+=operations
     int codeNum;
     ErrorCode errorCode;
 };
@@ -98,7 +98,7 @@ void errorOutput(const Line* input) {
                 std::cerr << "Error on line " << i + 1 << ": Invalid because of Extra decimal." << std::endl;
                 break;
             case NO_ERROR:
-                //there is no error, so there is no need to output an error
+                // There is no error, so there is no need to output an error.
                 break;
         }
     }
@@ -208,9 +208,7 @@ int findLineType(const Line input) {
 }
 
 int main(int argc, char* argv[]) {
-    //array of struct
     Line lines[MAX_CHARACTERS_PER_LINE];
-    //initializing
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         lines[i].arg2 = 0;
         lines[i].arg3 = 0;
@@ -222,23 +220,18 @@ int main(int argc, char* argv[]) {
             lines[i].arg1[j] = ' ';
         }
     }
-    //checking for invalid amount of arguments
     if (argc != 2) {
         std::cerr << "Error: invalid arguments" << std::endl;
         return -1;
     }
-    //attempting to open file
     std::ifstream fin;
     fin.open(argv[1]);
-    //if file cannot open
     if (fin.fail()) {
         std::cerr << "Error: invalid file" << std::endl;
         return -1;
     }
-    //character buffer
     char buffer[MAX_CHARACTERS_PER_LINE];
     int lineNum = 0;
-    //extracting file data
     while (fin.getline(buffer, MAX_CHARACTERS_PER_LINE)) {
         int i = 0, arg1val = 0;
         bool isReg = false;
@@ -254,7 +247,7 @@ int main(int argc, char* argv[]) {
             i++;
         }
         while (!isUnimportantCharacter(buffer[i])) {
-            if (buffer[i] == 'R' && isReg == false) {
+            if (buffer[i] == 'R' && !isReg) {
                 if (!isNumber(buffer[i + 1])) {
                     lines[lineNum].errorCode = INVALID;
                 }
@@ -275,7 +268,7 @@ int main(int argc, char* argv[]) {
             i++;
         }
         while (!isUnimportantCharacter(buffer[i])) {
-            if (buffer[i] == 'R' && isReg == false) {
+            if (buffer[i] == 'R' && !isReg) {
                 if (!isNumber(buffer[i + 1])) {
                     lines[lineNum].errorCode = INVALID;
                 }
@@ -296,7 +289,7 @@ int main(int argc, char* argv[]) {
             i++;
         }
         while (!isUnimportantCharacter(buffer[i])) {
-            if (buffer[i] == 'R' && isReg == false) {
+            if (buffer[i] == 'R' && !isReg) {
                 if (!isNumber(buffer[i + 1])) {
                     lines[lineNum].errorCode = INVALID;
                 }
@@ -331,7 +324,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //counting what the code value of the line is
     int code = -1;
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 1) {
@@ -366,7 +358,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //checking for duplicate error
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 3) {
             for (int p = 0; p < i; p++) {
@@ -393,7 +384,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //checking for extra characters
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 3) {
             for (int j = 0; j < MAX_OPERATIONS_PER_LINE; j++) {
