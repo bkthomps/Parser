@@ -1,10 +1,11 @@
 /*
  * Bailey Thompson
- * Parser (1.0.5)
+ * Parser (1.0.6)
  * 20 February 2017
  * Parses assembly file. If there are no assembly errors, various types of operations are counted. If there are errors,
  * the user is told what type of error, and what lines the errors are present on.
  */
+
 #include <iostream>
 #include <fstream>
 
@@ -25,28 +26,28 @@ struct Line {
     ErrorCode errorCode;
 };
 
-bool isNumber(const char input) {
+bool isNumber(char input) {
     return input >= '0' && input <= '9';
 }
 
-bool isUnimportantCharacter(const char input) {
+bool isUnimportantCharacter(char input) {
     return input == ' ' || input == '\t' || input == '#' || input == '\0';
 }
 
-bool isOnlyWhitespace(const char input) {
+bool isOnlyWhitespace(char input) {
     return (input == ' ' || input == '\t') && input != '#' && input != '\0';
 }
 
-bool isOnlyWhitespaceOrComma(const char input) {
+bool isOnlyWhitespaceOrComma(char input) {
     return (input == ' ' || input == '\t' || input == ',') && input != '#' && input != '\0';
 }
 
-bool isTooManyParameters(const Line input) {
+bool isTooManyParameters(Line input) {
     return (input.errorCode == NO_ERROR && input.lineType == 16 && (input.arg3 != 0 || input.arg4 != 0))
            || ((input.lineType >= 17 || input.lineType <= 7) && input.arg4 != 0 && input.errorCode == NO_ERROR);
 }
 
-bool isWrongOperation(const Line input) {
+bool isWrongOperation(Line input) {
     return (input.lineType == 16 && input.arg2 < 0) || (input.lineType > 16 && (input.arg2 > 0 || input.arg3 < 0))
            || ((input.lineType == 8 || input.lineType == 10 || input.lineType == 12 || input.lineType == 14)
                && (input.arg2 > 0 || input.arg3 > 0 || input.arg4 > 0))
@@ -56,14 +57,14 @@ bool isWrongOperation(const Line input) {
            || (input.lineType == 7 && input.arg2 < 0);
 }
 
-bool isErrorMissing(const Line input) {
+bool isErrorMissing(Line input) {
     return (input.lineType >= 4 && input.lineType <= 7 && (input.arg2 == 0 || input.arg3 == 0))
            || (input.lineType >= 8 && input.lineType <= 15 && (input.arg2 == 0 || input.arg3 == 0 || input.arg4 == 0))
            || (input.lineType >= 17 && (input.arg2 == 0 || input.arg3 == 0))
            || (input.lineType == 16 && input.arg2 == 0);
 }
 
-void errorOutput(const Line* input) {
+void errorOutput(Line* input) {
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         switch (input[i].errorCode) {
             case EXTRA:
@@ -105,7 +106,7 @@ void errorOutput(const Line* input) {
     return;
 }
 
-void outputCommandStatistics(const Line* input) {
+void outputCommandStatistics(Line* input) {
     int load = 0, alu = 0, jump = 0;
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (input[i].lineType == 4 || input[i].lineType == 5 || input[i].lineType == 6 || input[i].lineType == 7) {
@@ -134,7 +135,7 @@ void outputCommandStatistics(const Line* input) {
     return;
 }
 
-int findLineType(const Line input) {
+int findLineType(Line input) {
     bool isLabel = false;
     for (int i = 0; i < MAX_OPERATIONS_PER_LINE - 1; i++) {
         if (input.arg1[i] == ':' && input.arg1[i + 1] == ' ') {
@@ -143,7 +144,7 @@ int findLineType(const Line input) {
     }
     int ret = 0;
     if (input.arg1[0] == 'C' && input.arg1[1] == 'o' && input.arg1[2] == 'd' && input.arg1[3] == 'e'
-            && input.arg1[4] == ':') {
+        && input.arg1[4] == ':') {
         ret = 1;
     } else if (input.arg1[0] == 'D' && input.arg1[1] == 'a' && input.arg1[2] == 't'
                && input.arg1[3] == 'a' && input.arg1[4] == ':') {
@@ -316,9 +317,9 @@ int main(int argc, char* argv[]) {
     }
 
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
-        const int temp = findLineType(lines[i]);
-        if (temp != -1) {
-            lines[i].lineType = temp;
+        const int TEMP = findLineType(lines[i]);
+        if (TEMP != -1) {
+            lines[i].lineType = TEMP;
         } else {
             lines[i].errorCode = OPCODE;
         }
@@ -360,14 +361,14 @@ int main(int argc, char* argv[]) {
 
     for (int i = 0; i < MAX_CHARACTERS_PER_LINE; i++) {
         if (lines[i].lineType == 3) {
-            for (int p = 0; p < i; p++) {
+            for (int j = 0; j < i; j++) {
                 bool same = true;
-                int h = 0;
-                while (lines[i].arg1[h] != ':' && lines[p].arg1[h] != ':') {
-                    if (lines[i].arg1[h] != lines[p].arg1[h]) {
+                int k = 0;
+                while (lines[i].arg1[k] != ':' && lines[j].arg1[k] != ':') {
+                    if (lines[i].arg1[k] != lines[j].arg1[k]) {
                         same = false;
                     }
-                    h++;
+                    k++;
                 }
                 if (same) {
                     lines[i].errorCode = DUPLICATE;
